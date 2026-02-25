@@ -15,7 +15,7 @@ set site_name netboot.xyz
 set boot_domain boot.netboot.xyz
 set bootloader_filename netboot.xyz
 set ipxe_version ${version}
-set version 1.0
+set version 1.0.1
 set conn_type https
 
 :start
