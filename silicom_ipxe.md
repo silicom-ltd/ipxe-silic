@@ -1,5 +1,10 @@
 # Silicom iPXE support
 
+Updated 7/14/2026: Instructions added for building iPXE without the Silicom menu.
+The iPXE feature set (TFTP, HTTP, HTTPS) and additional patches (i226 support, etc) are still included.
+
+iPXE Upstream reference commit-id: bdb5b4aef
+
 The default iPXE menu (script) included with Silicom iPXE is a slightly modified netboot.xyz menu. The netboot.xyz menu has several nice features to demonstrate iPXE booting. This menu can be customized for the behaviors we specifically want to highlight. This is what it currently does:
 
  1. Supports chain loading the iPXE scripts via TFTP, HTTP, HTTPS
@@ -103,7 +108,7 @@ iPXE Build instructions: <https://ipxe.org/appnote/buildtargets>
    cd ipxe-silic
    ```
 
-1. Edit string settings in netboot.xyz.menu as needed:
+1. Edit string settings in netboot.xyz.menu as needed (skip for the Vanilla build):
 
    - set site_name {{ site_name }}
    - set boot_domain {{ boot_domain }}
@@ -119,6 +124,16 @@ iPXE Build instructions: <https://ipxe.org/appnote/buildtargets>
    ```
 
 1. Build iPXE and copy it to the Silicom UefiPayload
+
+   - ex: Vanilla build (no Silicom menu)
+
+   ```bash
+   cd src
+   make TRUST=../ca.crt  bin-x86_64-efi/ipxe.efi
+   cp bin-x86_64-efi/ipxe.efi ${UEFIPAYLOAD}/PldPlatform/RplPlatformPkg/Binaries/UefiDriver/NetBoot/X64/NetBoot.efi
+   ```
+
+   - ex: Silicom Menu build
 
    ```bash
    cd src
