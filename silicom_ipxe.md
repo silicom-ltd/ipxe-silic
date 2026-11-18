@@ -65,6 +65,37 @@ iPXE HTTPS certificates work with a single ipxe.org/ca.crt certificate include i
 Users can load the certs on the iPXE command line with the certstore command. This allows a "local" network copy of the certstore without rebuilding the binary.
 <https://ipxe.org/cmd/certstore> A custom iPXE build can also hold the self-signed certs without a need for the external cert store.
 
+## Secure Boot
+
+NetBoot.efi is in the UefiPayload firmware volume. The firmware trusts it because SBL verifies the payload. The firmware does not check NetBoot.efi against db, so NetBoot.efi needs no signature and no db entry. The boot manager starts NetBoot as a boot option, after EndOfDxe and SMM ReadyToLock.
+
+### iPXE command line and menu limits
+
+The iPXE shell, the embedded menu, and downloaded scripts all use the same commands. Under Secure Boot:
+
+- iPXE has no command that writes UEFI variables, memory, I/O ports, MSRs, or PCI configuration space. It cannot change the Secure Boot keys or the Secure Boot state.
+- iPXE loads every EFI image with the firmware `LoadImage()`. The firmware checks the image against db and dbx. An unsigned image does not run.
+- On Intel NICs, the `set` command changes iPXE settings in RAM only. Silicom platforms use only Intel NICs at this time. The Realtek, Solarflare, Myricom, and ConnectX-3 drivers can store settings in the card EEPROM.
+
+### Residual risks
+
+1. **SBAT revocation with shim.** By default, the iPXE `shim` command blanks the SbatLevel data that shim reads. Shim then does not apply SBAT revocations. `shim --allow-sbat` keeps the SBAT checks, but only when shim loads GRUB, which has an `.sbat` section. A kernel that shim loads directly does not boot with `--allow-sbat`. See <https://ipxe.org/cmd/shim>.
+1. **Kernel command line and initrd.** iPXE can boot a signed kernel with any kernel command line and an initrd that is not verified. A disk key sealed only to TPM PCR7 can then be unsealed. Seal to PCR4 as well as PCR7, or use a Unified Kernel Image (UKI) and seal to PCR11.
+1. **DHCP autoboot.** A NetBoot.efi built without `EMBED=` (the vanilla build) offers the Ctrl-B command line and autoboots from DHCP. The LAN DHCP server then decides which script or image iPXE runs. To mitigate, build with `EMBED=` set to a script that loads its next stage over HTTPS from a fixed server.
+1. **Unsigned scripts.** iPXE runs any script that it downloads. The firmware checks EFI images only, not iPXE scripts. To mitigate, run `imgtrust --permanent` in the embedded script, and verify each downloaded script and image with `imgverify`. The signing certificate must be a code-signing certificate that chains to a `TRUST=` root. `--permanent` stops a later `imgtrust --allow` from turning the check off. `imgtrust` checks only images that iPXE executes. It does not check an initrd, or a command line that `imgargs` changes. See <https://ipxe.org/cmd/imgtrust>.
+1. **UEFI variable read.** A script can read any UEFI variable with `${efi/...}`. Scripts use `${efi/SecureBoot}` to detect Secure Boot. This includes the Setup admin password record (a salted PBKDF2 hash), and a script can send the value to a server. Any code that can read the SPI flash, such as the OS, can also read the record, so treat it as public and rely on the strong Setup passwords that the firmware enforces. Do not keep secrets in UEFI variables. To remove `${efi/...}`, add `#undef EFI_SETTINGS` to `src/config/local/settings.h`.
+
+### HTTPS trust and db
+
+- `ca.crt` is the iPXE root CA. It is a TLS certificate only. Do not add it, or any other TLS CA, to the Secure Boot db.
+- `ca.crt` trusts all public CAs through cross-signed certificates that iPXE downloads from `http://ca.ipxe.org/auto`. For a private boot server, build with `TRUST=<customer CA>` so that iPXE trusts only that CA.
+- `TRUST=` sets the trusted root certificates at build time. DHCP and the iPXE command line cannot change them.
+- iPXE does not check whether a server certificate has been revoked. The Silicom build turns off `OCSP_CHECK` in `src/config/local/crypto.h`. To mitigate, remove that `#undef` if the boot network can reach the OCSP responders, or use a private CA with short-lived server certificates.
+
+### netboot.xyz with Secure Boot
+
+Only images signed by a db certificate, or loaded by a shim that the Microsoft UEFI CA signed, will boot. Most netboot.xyz menu entries fail. netboot.xyz reports that only Debian, Devuan, and Kali boot end to end. See <https://netboot.xyz/docs/kb/hardware/secureboot>. On a Secure Boot system, set `boot_domain` to a server that the customer controls.
+
 ## Self-hosted custom iPXE menu script without DHCP
 
 For testing purposes, you may want to make a custom menu.ipxe without manipulating the DHCP server.
